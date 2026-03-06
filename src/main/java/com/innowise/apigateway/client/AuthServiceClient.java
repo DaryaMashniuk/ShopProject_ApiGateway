@@ -14,9 +14,9 @@ public class AuthServiceClient {
 
   private WebClient webClient;
 
-  public AuthServiceClient(@Value("${authservice.url:http://localhost:8082}") String baseUrl) {
+  public AuthServiceClient(@Value("${authservice.url}") String baseUrl) {
     this.webClient = WebClient.builder()
-            .baseUrl(baseUrl)
+            .baseUrl(baseUrl.trim())
             .build();
   }
 

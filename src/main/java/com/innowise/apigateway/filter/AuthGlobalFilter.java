@@ -29,7 +29,6 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
   private final List<String> whitelist;
 
   private final AuthServiceClient authServiceClient;
-  private static final Logger logger = LogManager.getLogger(AuthGlobalFilter.class);
 
   @Override
   public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
@@ -46,15 +45,11 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
     }
 
     String token = authorization.substring(7);
-    logger.info("Processing path "+path);
     return authServiceClient.validate(token)
             .flatMap(validation -> {
               if (!validation.isValid()){
                 return unauthorized(exchange,"Invalid token");
               }
-              logger.info("Validation result: valid={}, userId={}, role={}",
-                      validation.isValid(), validation.getUserId(), validation.getRole());
-
 
               ServerHttpRequest mutatedRequest = request
                       .mutate()

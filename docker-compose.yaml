@@ -1,0 +1,121 @@
+version: "3.8"
+
+services:
+
+  userservice:
+    build: ../userservice
+    container_name: user-service
+    depends_on:
+      - user_db
+      - redis
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://user_db:5432/${USER_DB_NAME}
+      - SPRING_DATASOURCE_USERNAME=${DB_USER}
+      - SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD}
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
+    ports:
+      - "8081:8081"
+    networks:
+      - my_network
+
+  user_db:
+    image: postgres:15-alpine
+    container_name: user_db
+    ports:
+      - "5433:5432"
+    environment:
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${USER_DB_NAME}
+    networks:
+      - my_network
+
+  redis:
+    image: redis:7
+    container_name: redis
+    command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
+    networks:
+      - my_network
+
+  authservice:
+    build: ../authservice
+    container_name: authentication-service
+    depends_on:
+      - auth_db
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://auth_db:5432/${AUTH_DB_NAME}
+      - SPRING_DATASOURCE_USERNAME=${DB_USER}
+      - SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRATION=${JWT_EXPIRATION}
+      - JWT_REFRESH_TOKEN_EXPIRATION=${JWT_REFRESH_TOKEN_EXPIRATION}
+      - USER_SERVICE_URL=http://user-service:8081
+    ports:
+      - "8082:8082"
+    networks:
+      - my_network
+
+  auth_db:
+    image: postgres:15-alpine
+    container_name: auth_db
+    ports:
+      - "5434:5432"
+    environment:
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${AUTH_DB_NAME}
+    networks:
+      - my_network
+
+  orderservice:
+    build: ../orderservice
+    container_name: order-service
+    depends_on:
+      - order_db
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://order_db:5432/${ORDER_DB_NAME}
+      - SPRING_DATASOURCE_USERNAME=${DB_USER}
+      - SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD}
+    ports:
+      - "8080:8080"
+    networks:
+      - my_network
+
+  order_db:
+    image: postgres:15-alpine
+    container_name: order_db
+    ports:
+      - "5435:5432"
+    environment:
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${ORDER_DB_NAME}
+    networks:
+      - my_network
+
+  gateway-service:
+    build:
+      context: .
+    container_name: gateway-service
+    depends_on:
+      - authservice
+      - userservice
+      - orderservice
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - AUTHSERVICE_URL=http://authentication-service:8082
+      - USERSERVICE_URL=http://user-service:8081
+      - ORDERSERVICE_URL=http://order-service:8080
+      - AUTHSERVICE_WHITELIST=/api/v1/auth/login,/api/v1/auth/register,/api/v1/auth/refresh
+    ports:
+      - "8083:8083"
+    networks:
+      - my_network
+
+networks:
+  my_network:
+    driver: bridge

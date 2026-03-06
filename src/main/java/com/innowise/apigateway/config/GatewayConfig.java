@@ -9,36 +9,39 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class GatewayConfig {
 
-  @Value("${authservice.url:http://localhost:8082}")
+  @Value("${authservice.url}")
   private String authServiceUrl;
 
-  @Value("${orderservice.url:http://localhost:8080}")
+  @Value("${orderservice.url}")
   private String orderServiceUrl;
 
-  @Value("${userservice.url:http://localhost:8081}")
+  @Value("${userservice.url}")
   private String userServiceUrl;
 
   @Bean
   public RouteLocator customRoutes(RouteLocatorBuilder builder) {
+    String authUrl = authServiceUrl.trim();
+    String userUrl = userServiceUrl.trim();
+    String orderUrl = orderServiceUrl.trim();
     return builder.routes()
             .route("auth-public", r -> r
                     .path("/api/v1/auth/login", "/api/v1/auth/register", "/api/v1/auth/refresh")
                     .filters(f -> f.stripPrefix(0))
-                    .uri(authServiceUrl))
+                    .uri(authUrl))
             .route("user-service", r -> r
                     .path("/api/v1/users/**")
                     .filters(f -> f
                             .rewritePath("/api/v1/users(?<segment>/?.*)", "/userservice/api/v1/users${segment}")
                     )
-                    .uri(userServiceUrl))
+                    .uri(userUrl))
             .route("auth-protected", r -> r
                     .path("/api/v1/auth/**")
                     .filters(f -> f.stripPrefix(0))
-                    .uri(authServiceUrl))
+                    .uri(authUrl))
             .route("order-service", r -> r
                     .path("/api/v1/orders/**")
                     .filters(f -> f.stripPrefix(0))
-                    .uri(orderServiceUrl))
+                    .uri(orderUrl))
             .build();
 
   }
