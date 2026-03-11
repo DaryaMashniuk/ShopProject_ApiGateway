@@ -4,8 +4,6 @@ import com.innowise.apigateway.client.AuthServiceClient;
 import com.innowise.apigateway.exception.AuthServiceIsDownException;
 import com.innowise.apigateway.exception.TokenValidationException;
 import lombok.RequiredArgsConstructor;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
@@ -26,8 +24,7 @@ import java.util.List;
 public class AuthGlobalFilter implements GlobalFilter, Ordered {
 
   @Value("${authservice.whitelist}")
-  private final List<String> whitelist;
-
+  private List<String> whitelist;
   private final AuthServiceClient authServiceClient;
 
   @Override
@@ -65,7 +62,23 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
   }
 
   private boolean isWhitelisted(String path) {
-    return whitelist.stream().anyMatch(path::equals);
+    String normalizedPath = normalizePath(path);
+
+    return whitelist.stream()
+            .map(this::normalizePath)
+            .anyMatch(normalizedPath::equals);
+  }
+
+  private String normalizePath(String path) {
+    if (path == null) {
+      return "";
+    }
+
+    if (path.endsWith("/") && path.length() > 1) {
+      path = path.substring(0, path.length() - 1);
+    }
+
+    return path;
   }
 
   private Mono<Void> unauthorized(ServerWebExchange exchange, String message) {

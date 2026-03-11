@@ -1,7 +1,9 @@
 package com.innowise.apigateway.client;
 
+import com.innowise.apigateway.exception.AuthServiceIsDownException;
 import com.innowise.apigateway.exception.TokenValidationException;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
@@ -27,8 +29,12 @@ public class AuthServiceClient {
             .bodyValue(Map.of("token", token))
             .retrieve()
             .onStatus(
-                    status -> status.is4xxClientError() || status.is5xxServerError(),
+                    HttpStatusCode::is4xxClientError,
                     response -> Mono.error(new TokenValidationException("Invalid token"))
+            )
+            .onStatus(
+                    HttpStatusCode::is5xxServerError,
+                    response -> Mono.error(new AuthServiceIsDownException("Auth service is down"))
             )
             .bodyToMono(ValidationResponseDto.class);
   }
