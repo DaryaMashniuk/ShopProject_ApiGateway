@@ -1,13 +1,122 @@
-version: "3.8"
+volumes:
+  user_postgres_data:
+    driver: local
+  auth_postgres_data:
+    driver: local
+  order_postgres_data:
+    driver: local
+  mongodb_data:
+    driver: local
+  kafka_data:
+    driver: local
 
 services:
+
+  user_db:
+    image: postgres:15-alpine
+    container_name: user_db
+    restart: unless-stopped
+    ports:
+      - "5433:5432"
+    environment:
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${USER_DB_NAME}
+    networks:
+      - my_network
+
+  auth_db:
+    image: postgres:15-alpine
+    container_name: auth_db
+    restart: unless-stopped
+    ports:
+      - "5434:5432"
+    environment:
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${AUTH_DB_NAME}
+    volumes:
+      - auth_postgres_data:/var/lib/postgresql/data
+    networks:
+      - my_network
+
+
+  order_db:
+    image: postgres:15-alpine
+    container_name: order_db
+    restart: unless-stopped
+    ports:
+      - "5435:5432"
+    environment:
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${ORDER_DB_NAME}
+    volumes:
+      - order_postgres_data:/var/lib/postgresql/data
+    networks:
+      - my_network
+
+
+  mongodb:
+    image: mongo:7.0
+    container_name: mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-secret}
+      MONGO_INITDB_DATABASE: payments
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - my_network
+
+  redis:
+    image: redis:7
+    container_name: redis
+    restart: unless-stopped
+    command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
+    networks:
+      - my_network
+
+  kafka:
+    image: apache/kafka:3.7.0
+    container_name: kafka
+    restart: unless-stopped
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: CONTROLLER://kafka:9093,PLAINTEXT://kafka:29092,EXTERNAL://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,EXTERNAL://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_INTER_BROKER_PROTOCOL_VERSION: "3.7"
+      KAFKA_LOG_MESSAGE_FORMAT_VERSION: "3.7"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    networks:
+      - my_network
 
   userservice:
     build: ../userservice
     container_name: user-service
+    restart: unless-stopped
     depends_on:
       - user_db
       - redis
+
     environment:
       - SPRING_PROFILES_ACTIVE=docker
       - SPRING_DATASOURCE_URL=jdbc:postgresql://user_db:5432/${USER_DB_NAME}
@@ -20,28 +129,10 @@ services:
     networks:
       - my_network
 
-  user_db:
-    image: postgres:15-alpine
-    container_name: user_db
-    ports:
-      - "5433:5432"
-    environment:
-      - POSTGRES_USER=${DB_USER}
-      - POSTGRES_PASSWORD=${DB_PASSWORD}
-      - POSTGRES_DB=${USER_DB_NAME}
-    networks:
-      - my_network
-
-  redis:
-    image: redis:7
-    container_name: redis
-    command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
-    networks:
-      - my_network
-
   authservice:
     build: ../authservice
     container_name: authentication-service
+    restart: unless-stopped
     depends_on:
       - auth_db
     environment:
@@ -58,42 +149,43 @@ services:
     networks:
       - my_network
 
-  auth_db:
-    image: postgres:15-alpine
-    container_name: auth_db
-    ports:
-      - "5434:5432"
-    environment:
-      - POSTGRES_USER=${DB_USER}
-      - POSTGRES_PASSWORD=${DB_PASSWORD}
-      - POSTGRES_DB=${AUTH_DB_NAME}
-    networks:
-      - my_network
-
   orderservice:
     build: ../orderservice
     container_name: order-service
+    restart: unless-stopped
     depends_on:
       - order_db
+      - kafka
     environment:
       - SPRING_PROFILES_ACTIVE=docker
       - SPRING_DATASOURCE_URL=jdbc:postgresql://order_db:5432/${ORDER_DB_NAME}
       - SPRING_DATASOURCE_USERNAME=${DB_USER}
       - SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD}
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - KAFKA_PAYMENT_TOPIC_NAME=${KAFKA_PAYMENT_TOPIC_NAME:-payment-events}
+      - KAFKA_ORDER_TOPIC_NAME=${KAFKA_ORDER_TOPIC_NAME:-order-events}
     ports:
       - "8080:8080"
     networks:
       - my_network
 
-  order_db:
-    image: postgres:15-alpine
-    container_name: order_db
-    ports:
-      - "5435:5432"
+  paymentservice:
+    build: ../paymentservice
+    container_name: payment-service
+    restart: unless-stopped
+    depends_on:
+      - mongodb
+      - kafka
     environment:
-      - POSTGRES_USER=${DB_USER}
-      - POSTGRES_PASSWORD=${DB_PASSWORD}
-      - POSTGRES_DB=${ORDER_DB_NAME}
+      - SPRING_PROFILES_ACTIVE=docker
+      - PAYMENT_CLIENT_URL=https://www.random.org
+      - MONGO_URL=mongodb://mongodb:27017/payments
+      - SPRING_LIQUIBASE_ENABLED=false
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - KAFKA_PAYMENT_TOPIC_NAME=${KAFKA_PAYMENT_TOPIC_NAME:-payment-events}
+      - KAFKA_ORDER_TOPIC_NAME=${KAFKA_ORDER_TOPIC_NAME:-order-events}
+    ports:
+      - "8084:8084"
     networks:
       - my_network
 
@@ -101,15 +193,18 @@ services:
     build:
       context: .
     container_name: gateway-service
+    restart: unless-stopped
     depends_on:
       - authservice
       - userservice
       - orderservice
+      - paymentservice
     environment:
       - SPRING_PROFILES_ACTIVE=docker
       - AUTHSERVICE_URL=http://authentication-service:8082
       - USERSERVICE_URL=http://user-service:8081
       - ORDERSERVICE_URL=http://order-service:8080
+      - PAYMENTSERVICE_URL=http://payment-service:8084
       - AUTHSERVICE_WHITELIST=/api/v1/auth/login,/api/v1/auth/register,/api/v1/auth/refresh
     ports:
       - "8083:8083"
