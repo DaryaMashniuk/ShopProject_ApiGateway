@@ -18,7 +18,7 @@ public class GatewayConfig {
   @Value("${userservice.url}")
   private String userServiceUrl;
 
-  @Value("${paymentervice.url}")
+  @Value("${paymentservice.url}")
   private String paymentServiceUrl;
 
   @Bean
