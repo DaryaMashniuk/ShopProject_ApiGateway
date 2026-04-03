@@ -18,11 +18,15 @@ public class GatewayConfig {
   @Value("${userservice.url}")
   private String userServiceUrl;
 
+  @Value("${paymentservice.url}")
+  private String paymentServiceUrl;
+
   @Bean
   public RouteLocator customRoutes(RouteLocatorBuilder builder) {
     String authUrl = authServiceUrl.trim();
     String userUrl = userServiceUrl.trim();
     String orderUrl = orderServiceUrl.trim();
+    String paymentUrl = paymentServiceUrl.trim();
     return builder.routes()
             .route("auth-public", r -> r
                     .path("/api/v1/auth/login", "/api/v1/auth/register", "/api/v1/auth/refresh")
@@ -42,6 +46,10 @@ public class GatewayConfig {
                     .path("/api/v1/orders/**")
                     .filters(f -> f.stripPrefix(0))
                     .uri(orderUrl))
+            .route("payment-service", r-> r
+                    .path("/api/v1/payments/**")
+                    .filters(f -> f.stripPrefix(0))
+                    .uri(paymentUrl))
             .build();
 
   }
