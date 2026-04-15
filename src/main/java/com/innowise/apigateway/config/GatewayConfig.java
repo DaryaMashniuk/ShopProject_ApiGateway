@@ -41,7 +41,7 @@ public class GatewayConfig {
                     .filters(f -> f.stripPrefix(0))
                     .uri(authUrl))
             .route("order-service", r -> r
-                    .path("/api/v1/orders/**")
+                    .path("/api/v1/orders/**", "/api/v1/items/**")
                     .filters(f -> f.stripPrefix(0))
                     .uri(orderUrl))
             .route("payment-service", r-> r
