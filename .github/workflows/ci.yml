@@ -1,4 +1,4 @@
-name: User Service CI/CD
+name: Api Gateway CD
 
 on:
   push:
