@@ -33,17 +33,15 @@ public class GatewayConfig {
                     .filters(f -> f.stripPrefix(0))
                     .uri(authUrl))
             .route("user-service", r -> r
-                    .path("/api/v1/users/**")
-                    .filters(f -> f
-                            .rewritePath("/api/v1/users(?<segment>/?.*)", "/userservice/api/v1/users${segment}")
-                    )
+                    .path("/api/v1/users/**", "/api/v1/cards/**")
+                    .filters(f -> f.rewritePath("/api/v1/(?<segment>.*)", "/userservice/api/v1/${segment}"))
                     .uri(userUrl))
             .route("auth-protected", r -> r
                     .path("/api/v1/auth/**")
                     .filters(f -> f.stripPrefix(0))
                     .uri(authUrl))
             .route("order-service", r -> r
-                    .path("/api/v1/orders/**")
+                    .path("/api/v1/orders/**", "/api/v1/items/**")
                     .filters(f -> f.stripPrefix(0))
                     .uri(orderUrl))
             .route("payment-service", r-> r
